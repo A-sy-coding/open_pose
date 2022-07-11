@@ -1,1 +1,1 @@
-# Open pose model 구현
+# Open pose 모델 구현
