@@ -363,11 +363,15 @@ def plot_pose(img_orig, joint_list, person_to_joint_assoc, bool_fast_plot=True, 
     to_plot = canvas.copy() if bool_fast_plot else cv2.addWeighted(
         img_orig, 0.3, canvas, 0.7, 0)
 
+    joint_lmList = [] # 추가
     limb_thickness = 4
+
+
     # Last 2 limbs connect ears with shoulders and this looks very weird.
     # Disabled by default to be consistent with original rtpose output
     which_limbs_to_plot = NUM_LIMBS if plot_ear_to_shoulder else NUM_LIMBS - 2
     for limb_type in range(which_limbs_to_plot):
+        
         for person_joint_info in person_to_joint_assoc:
             joint_indices = person_joint_info[joint_to_limb_heatmap_relationship[limb_type]].astype(
                 int)
@@ -378,14 +382,30 @@ def plot_pose(img_orig, joint_list, person_to_joint_assoc, bool_fast_plot=True, 
             # joint_coords[:,0] represents Y coords of both joints;
             # joint_coords[:,1], X coords
             joint_coords = joint_list[joint_indices, 0:2]
+            joint_index = joint_list[joint_indices, -1] # 추가 -> 관절 위치
+            
 
+            # ------------------- 추가 ---------------------
+            # index와 coords 값들 합치기 --> 추가
+            joint_coords_index = [] # x, y, index(관절 위치)
+            for coords, index in zip(joint_coords, joint_index):
+                joint_coords_index.append(np.append(coords, int(index)))
+            
+            # x, y, index값들을 하나의 리스트에 저장
+            for info in joint_coords_index:
+                joint_lmList.append(info)
+            # ----------------------------------------------
+            
             for joint in joint_coords:  # Draw circles at every joint
                 cv2.circle(canvas, tuple(joint[0:2].astype(
                     int)), 4, (255, 255, 255), thickness=-1)
+    
             # mean along the axis=0 computes meanYcoord and meanXcoord -> Round
             # and make int to avoid errors
             coords_center = tuple(
                 np.round(np.mean(joint_coords, 0)).astype(int))
+            
+            
             # joint_coords[0,:] is the coords of joint_src; joint_coords[1,:]
             # is the coords of joint_dst
             limb_dir = joint_coords[0, :] - joint_coords[1, :]
@@ -403,7 +423,7 @@ def plot_pose(img_orig, joint_list, person_to_joint_assoc, bool_fast_plot=True, 
             if not bool_fast_plot:
                 canvas = cv2.addWeighted(canvas, 0.4, cur_canvas, 0.6, 0)
 
-    return to_plot, canvas
+    return to_plot, canvas, joint_lmList
 
 
 def decode_pose(img_orig, heatmaps, pafs):
@@ -414,10 +434,29 @@ def decode_pose(img_orig, heatmaps, pafs):
     # [1]=neck...)
     joint_list_per_joint_type = NMS(param,
                                     heatmaps, img_orig.shape[0] / float(heatmaps.shape[0]))
+    
+    print('----------- NMS return ---------') 
+    # 열은 {x,y} position, the score (probability) and a unique id (counter)를 나타낸다.
+    # 각 행은 부위들을 나타낸다.
+    # print(joint_list_per_joint_type[4])
+    # print(joint_list_per_joint_type[4][-1][0:2]) # x,y 좌표
+    # print([i for i in joint_list_per_joint_type]) # unique id
+    print(len(joint_list_per_joint_type))
+    print('-------------------------------')
+
     # joint_list is an unravel'd version of joint_list_per_joint, where we add
     # a 5th column to indicate the joint_type (0=nose, 1=neck...)
     joint_list = np.array([tuple(peak) + (joint_type,) for joint_type,
                            joint_peaks in enumerate(joint_list_per_joint_type) for peak in joint_peaks])
+    
+    print('---------joint_list---------')
+    # a 5th column to indicate the joint_type (0=nose, 1=neck...)
+    # print(joint_list[4])
+    # print(len(joint_list[4]))    
+    # print([i[4] for i in joint_list])
+    print(len([i[4] for i in joint_list])) # joint_type
+    print('-------------------------------')
+
 
     # Step 2: find which joints go together to form limbs (which wrists go
     # with which elbows)
@@ -429,8 +468,17 @@ def decode_pose(img_orig, heatmaps, pafs):
     # Step 3: associate limbs that belong to the same person
     person_to_joint_assoc = group_limbs_of_same_person(
         connected_limbs, joint_list)
+    print('------------joint_assoc------------')
+    # First NUM_JOINTS columns contain the index (in joint_list) of the joints associated with that person (or -1 if their i-th joint wasn't found)
+    # 2nd-to-last column: Overall score of the joints+limbs that belong to this person
+    # Last column: Total count of joints found for this person
+    # print(person_to_joint_assoc[0])
+    print(len(person_to_joint_assoc))
+    # print([i[0] for i in person_to_joint_assoc]) # first column
+    print([i[-1] for i in person_to_joint_assoc]) # last column
+    print('-----------------------------------')
 
     # (Step 4): plot results
-    to_plot, canvas = plot_pose(img_orig, joint_list, person_to_joint_assoc)
+    to_plot, canvas, joint_coords = plot_pose(img_orig, joint_list, person_to_joint_assoc)
 
-    return to_plot, canvas, joint_list, person_to_joint_assoc
+    return to_plot, canvas, joint_list, person_to_joint_assoc, joint_coords
