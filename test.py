@@ -160,7 +160,7 @@ import math
 # elbow test -> 5, 6, 7
 
 # angle 출력 --> img는 pose_estimator출력한 이미지, ,(p1,p2,p3) : 관절 위치
-def findAngle(img, p1, p2, p3, draw=True):   
+def left_findAngle(img, p1, p2, p3, draw=True):   
         #Get the landmarks
         x1,y1 = map(int,joint_dict[p1][0])
         x2,y2 = map(int,joint_dict[p2][0])
@@ -173,9 +173,9 @@ def findAngle(img, p1, p2, p3, draw=True):
         if angle < 0 :
             angle +=  360  # 값이 360도라는 범위 안에 들게 한다.
             if angle > 180:
-                angle = 360 - 180 # 값의 범위를 180도 안으로 설정하도록 한다.
-            elif angle > 180:
-                angle = 360 - angle
+                angle = 360 - angle # 값의 범위를 180도 안으로 설정하도록 한다.
+        elif angle > 180:
+            angle = 360 - angle
         print('변환 후 :', angle)
         
         #Draw
@@ -195,7 +195,42 @@ def findAngle(img, p1, p2, p3, draw=True):
                         cv2.FONT_HERSHEY_PLAIN, 2, (0,0,255), 2)
         return angle
 
-def push_up(img, joint_dict):
+def right_findAngle(img, p1, p2, p3, draw=True):   
+        #Get the landmarks
+        x1,y1 = map(int,joint_dict[p1][0])
+        x2,y2 = map(int,joint_dict[p2][0])
+        x3,y3 = map(int,joint_dict[p3][0])        
+        
+        # radians를 degree로 변환
+        angle = math.degrees(math.atan2(y3-y2, x3-x2) - math.atan2(y1-y2, x1-x2))
+
+        print('변환 전 :', angle)
+        if angle < 0 :
+            angle +=  360  # 값이 360도라는 범위 안에 들게 한다.
+            if angle > 180:
+                angle = 360 - angle # 값의 범위를 180도 안으로 설정하도록 한다.
+        elif angle > 180:
+            angle = 360 - angle
+        print('변환 후 :', angle)
+        
+        #Draw
+        if draw:
+            cv2.line(img, (x1, y1), (x2, y2), (255,255,255), 3)
+            cv2.line(img, (x3, y3), (x2, y2), (255,255,255), 3)
+
+            
+            cv2.circle(img, (x1, y1), 5, (0,0,255), cv2.FILLED)
+            cv2.circle(img, (x1, y1), 15, (0,0,255), 2)
+            cv2.circle(img, (x2, y2), 5, (0,0,255), cv2.FILLED)
+            cv2.circle(img, (x2, y2), 15, (0,0,255), 2)
+            cv2.circle(img, (x3, y3), 5, (0,0,255), cv2.FILLED)
+            cv2.circle(img, (x3, y3), 15, (0,0,255), 2)
+            
+            cv2.putText(img, str(int(angle)), (x2-50, y2+50), 
+                        cv2.FONT_HERSHEY_PLAIN, 2, (0,0,255), 2)
+        return angle
+
+def push_up(img, joint_dict, count, direction, form, feedback):
     '''
     img -> pose 연결 한 후 반환한 이미지 -> pose_test 반환 값
     '''
@@ -214,9 +249,9 @@ def push_up(img, joint_dict):
     
     if len(joint_dict) != 0 and flag == 1:
 
-        elbow = findAngle(out, 5, 6, 7)
-        shoulder = findAngle(out, 6, 5, 11)
-        hip = findAngle(out, 5, 11,12)
+        elbow = left_findAngle(out, 5, 6, 7)
+        shoulder = left_findAngle(out, 6, 5, 11)
+        hip = left_findAngle(out, 5, 11,12)
         
         print(elbow)
         print(shoulder)
@@ -269,6 +304,88 @@ def push_up(img, joint_dict):
 
     return img
 
-result = push_up(out, joint_dict)
-# cv2.imshow('img', out)
-# cv2.waitKey(0)
+def squat(img, joint_dict, count, direction, form, feedback):
+    '''
+    (0-'nose'	1-'neck' 2-'right_shoulder' 3-'right_elbow' 4-'right_wrist'
+    5-'left_shoulder' 6-'left_elbow'	7-'left_wrist'  8-'right_hip'
+    9-'right_knee'	 10-'right_ankle'	11-'left_hip'   12-'left_knee'
+    13-'left_ankle'	 14-'right_eye'	    15-'left_eye'   16-'right_ear'
+    17-'left_ear' )
+    '''
+    # left leg --> left hip(11), left knee(12), left ankle(13)
+    # right leg --> right hip(8), right knee(9), right angle(10)
+
+    need_pose = [8,9,10,11,12,13] # squat를 detect하기 위해 필요한 pose 위치
+    
+    flag = 1
+    for pose in need_pose:  # joint_dict.keys()에 필요한 pose 위치가 없으면 수행 x
+        if pose not in joint_dict.keys():
+            flag=0
+            break
+    
+    if len(joint_dict) != 0 and flag == 1:
+        
+        left_knee_angle = left_findAngle(out, 11, 12, 13)
+        right_knee_angle = right_findAngle(out, 8, 9, 10)
+    
+        print('-------- find angle -----------')    
+        print('left angle : ',left_knee_angle)
+        print('right angle : ', right_knee_angle)
+        print('------------------------------')    
+
+        # squat 성공 퍼센트 
+        per = np.interp(right_knee_angle, (90, 160), (0, 100))
+        print(per)
+
+        # squat 진행정도를 보여주는 bar
+        bar = np.interp(right_knee_angle, (0,160), (380,50))
+
+        # squat 시작 자세 check
+        if left_knee_angle > 160 and right_knee_angle > 160:
+            form = 1
+        
+        # squat 전체 모션을 check
+        if form == 1:
+            if per == 0:
+                if left_knee_angle < 90 and right_knee_angle < 90:
+                    feadback = 'Up'
+                    if direction == 0:
+                        count += 0.5
+                        direction = 1 # 방향 전환
+                else:
+                    feedback = 'Fix Form'
+            
+            if per == 100:
+                if left_knee_angle > 160 and right_knee_angle > 160:
+                    feedback = 'Down'
+                    if direction == 1:
+                        count += 0.5
+                        direction = 0
+                else:
+                    feedback = 'Fix Form'
+
+        # draw bar
+        if form == 1:
+            cv2.rectangle(img, (580, 50), (600, 380), (0, 255, 0), 3)
+            cv2.rectangle(img, (580, int(bar)), (600, 380), (0, 255, 0), cv2.FILLED)
+            cv2.putText(img, f'{int(per)}%', (565, 430), cv2.FONT_HERSHEY_PLAIN, 2,(255, 0, 0), 2)
+        
+        # squat count
+        cv2.rectangle(img, (0,380), (100, 480), (0, 255, 0), cv2.FILLED)
+        cv2.putText(img, str(int(count)), (25, 455), cv2.FONT_HERSHEY_PLAIN, 5, (255,0,0), 5)
+
+        # feedback print
+        cv2.rectangle(img, (500,0), (640, 40), (255,255,255), cv2.FILLED)
+        cv2.putText(img, feedback, (500, 40), cv2.FONT_HERSHEY_PLAIN, 2, (0,255,0), 2)
+
+    return img
+
+count = 0
+direction = 0
+form = 0
+feedback = "Fix Form"
+
+# result = push_up(out, joint_dict, count, direction, form, feedback) # push-up mode
+result = squat(out, joint_dict, count, direction, form, feedback) # squat mode
+cv2.imshow('img', out)
+cv2.waitKey(0)
