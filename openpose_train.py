@@ -38,6 +38,7 @@ dataloaders_dict = {'train':train_dataloader, 'val':val_dataloader}
 # print(dataloaders_dict)
 
 from utils.openpose_net import OpenPoseNet
+from utils.openpose_loss import OpenPoseLoss
 # model
 net = OpenPoseNet()
 

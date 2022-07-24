@@ -68,7 +68,7 @@ def pose_test(img, pafs, heatmaps):
     oriImg = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     # pose 연결
-    _, result_img, _, _ ,joint_lmList= decode_pose(oriImg, heatmaps, pafs)  # to_plot, canvas, joint_list, person_to_joint_assoc
+    _, result_img, _, _ ,joint_lmList= decode_pose(oriImg, heatmaps, pafs)  # to_plot, canvas, joint_list, person_to_joint_assoc, joint_coords
     
     return result_img, joint_lmList
 
@@ -400,5 +400,5 @@ state = net.state_dict()
 state.update(weights_load)
 net.load_state_dict(state)
 
-# squat(net)
-push_up(net)
+squat(net)
+# push_up(net)
